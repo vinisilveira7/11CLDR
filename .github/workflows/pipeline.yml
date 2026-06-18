@@ -3,95 +3,87 @@ name: pipeline
 on:
   push:
   workflow_dispatch:
-
-jobs:
+jobs:  
   unit-test:
     runs-on: ubuntu-latest
-    
+
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      
-      - run: mvn test
-      
-      - name: Generate JaCoCo Badge
-        id: jacoco
-        uses: cicirello/jacoco-badge-generator@v2.11.0
-        
-      - name: Log coverage percentage
-        run: |
-          echo "coverage = ${{ steps.jacoco.outputs.coverage }}"
-          echo "branch coverage = ${{ steps.jacoco.outputs.branches }}"
-          
-      - name: Upload JaCoCo coverage report
-        uses: actions/upload-artifact@v4
-        with:
-          name: jacoco-report
-          path: target/site/jacoco/
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - run: mvn test  
+    - name: Generate JaCoCo Badge
+      id: jacoco
+      uses: cicirello/jacoco-badge-generator@v2.0.1
+    - name: Log coverage percentage
+      run: |
+        echo "coverage = ${{ steps.jacoco.outputs.coverage }}"
+        echo "branch coverage = ${{ steps.jacoco.outputs.branches }}"    
+    - name: Upload JaCoCo coverage report
+      uses: actions/upload-artifact@v4.4.0
+      with:
+        name: jacoco-report
+        path: target/site/jacoco
 
   build: 
     runs-on: ubuntu-latest
     needs: unit-test
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          
-      - name: Build with Maven
-        run: mvn -B package -DskipTests --file pom.xml      
-        
-      - name: Display structure of downloaded files
-        run: ls -R
-        working-directory: target/
-       
-      - name: Upload JAR
-        # This uploads artifacts from your workflow allowing you to share data between jobs and store data once a workflow is complete.
-        uses: actions/upload-artifact@v4
-        with:
-          # Set artifact name
-          name: artifact
-          # From this path
-          path: ./target/demo-0.0.2.7-SNAPSHOT.jar
-       
-      # Nota: Este passo abaixo rodará o build novamente (com testes). Se não for necessário, pode apagá-lo.
-      - name: Package
-        run: mvn package  
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+    - name: Build with Maven
+      run: mvn -B package -DskipTests --file pom.xml      
+    - name: Display structure of downloaded files
+      run: ls -R
+      working-directory: target/
+
+    - name: Upload JAR
+        #This uploads artifacts from your workflow allowing you to share data between jobs and store data once a workflow is complete.
+      uses: actions/upload-artifact@v4.4.0
+      with:
+        #Set artifact name
+        name: artifact
+        #From this path
+        path: ./target/demo-0.0.2.7-SNAPSHOT.jar
+
+    - name: Package
+      run: mvn package  
 
   deploy-STG:
     runs-on: ubuntu-latest
     needs: build
-    if: github.ref == 'refs/heads/develop2'
-    
+
+    if: github.ref == 'refs/heads/develop'
     steps:
       - name: Deploy 
         shell: bash
         run: |
-          echo "Deploy STG"
+          echo "Deploy STG"    
 
   Smoketest:
     runs-on: ubuntu-latest
     needs: deploy-STG
-    if: github.ref == 'refs/heads/develop2'
-    
+
+    if: github.ref == 'refs/heads/develop'
     steps:
-      - uses: actions/checkout@v4
-      - name: Run Smoke Test
+      - uses: actions/checkout@v3
+      - name: Deploy 
         shell: bash
         run: |
-          sh src/main/scripts/smoketest.sh
+          sh 'src/main/scripts/smoketest.sh'
 
   testeIntegrados:
     runs-on: ubuntu-latest
     needs: Smoketest
-    if: github.ref == 'refs/heads/develop2'
-    
+    if: github.ref == 'refs/heads/develop'
     steps:
-      - uses: actions/checkout@v4
-      - name: Run Integrated Tests
+      - uses: actions/checkout@v3
+      - name: Deploy 
         shell: bash
         run: |
-          sh src/main/scripts/testeIntegrado.sh
+          sh 'src/main/scripts/testeIntegrado.sh'  
 
   deploy-Pre:
     runs-on: ubuntu-latest
@@ -107,24 +99,37 @@ jobs:
 
   SmoketestPre:
     runs-on: ubuntu-latest
-    needs: deploy-Pre # Atenção: certifique-se de que o job 'deploy-Pre' existe no seu arquivo final.
+    needs: deploy-Pre
+
     if: github.ref == 'refs/heads/release'
-    
     steps:
-      - uses: actions/checkout@v4
-      - name: Run Pre Smoke Test
+      - uses: actions/checkout@v3
+      - name: Deploy 
         shell: bash
         run: |
-          sh src/main/scripts/smoketest.sh
+          sh 'src/main/scripts/smoketest.sh'          
 
   testeFuncionais:
     runs-on: ubuntu-latest
     needs: SmoketestPre
+
     if: github.ref == 'refs/heads/release'
-    
     steps:
-      - uses: actions/checkout@v4
-      - name: Run Functional Tests
+      - uses: actions/checkout@v3
+      - name: Deploy 
         shell: bash
         run: |
-          sh src/main/scripts/testesFuncionais.sh
+          sh 'src/main/scripts/testesFuncionais.sh'  
+
+  deploy-Prod:
+    runs-on: ubuntu-latest
+
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: prod
+    needs: build
+    steps:
+      - name: Deploy 
+        shell: bash
+        run: |
+          echo "Deploy PROD"
